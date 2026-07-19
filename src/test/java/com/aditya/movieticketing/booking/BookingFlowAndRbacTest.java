@@ -126,4 +126,19 @@ class BookingFlowAndRbacTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"seatIds\":[" + seat + "]}"))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("a customer cannot hit an admin endpoint (403)")
+    void customerCannotHitAdminEndpoint() throws Exception {
+        mockMvc.perform(post("/admin/cities")
+                        .with(httpBasic("alice", "alice123"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Pune\",\"state\":\"MH\"}"))
+                .andExpect(status().isForbidden());
+
+        // and an admin CAN
+        mockMvc.perform(post("/admin/cities")
+                        .with(httpBasic("admin", "admin123"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Pune\",\"state\":\"MH\"}"))
+                .andExpect(status().isCreated());
+    }
 }
