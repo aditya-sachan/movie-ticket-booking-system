@@ -11,10 +11,6 @@ public record CreateBookingRequest(
         @NotNull(message = "holdToken is required")
         UUID holdToken,
 
-        // SEAM (slice 5): replaced by the authenticated principal once HTTP Basic is wired.
-        @NotNull(message = "userId is required")
-        Long userId,
-
         // Optional discount code; re-validated and applied at confirm time.
         String discountCode
 ) {

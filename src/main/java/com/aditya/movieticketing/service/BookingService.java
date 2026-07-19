@@ -80,9 +80,9 @@ public class BookingService {
      * BookingSeat rows, a (stub) Payment, and a notification outbox row.
      */
     @Transactional
-    public BookingResponse confirm(CreateBookingRequest request) {
-        AppUser user = appUserRepository.findById(request.userId())
-                .orElseThrow(() -> new UserNotFoundException(request.userId()));
+    public BookingResponse confirm(CreateBookingRequest request, String username) {
+        AppUser user = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException(username));
         Show show = showRepository.findById(request.showId())
                 .orElseThrow(() -> new ShowNotFoundException(request.showId()));
 
@@ -154,12 +154,14 @@ public class BookingService {
      * RefundPolicy, update the payment, and write a cancellation notification to the outbox.
      */
     @Transactional
-    public CancelResponse cancel(Long bookingId, Long userId) {
+    public CancelResponse cancel(Long bookingId, String username) {
+        AppUser currentUser = appUserRepository.findByUsername(username)
+                .orElseThrow(() -> new UserNotFoundException(username));
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
-        // Ownership guard (seam: slice 5 moves this to @PreAuthorize on the principal).
-        if (!booking.getUser().getId().equals(userId)) {
+        // Ownership guard: a customer may only cancel their own booking.
+        if (!booking.getUser().getId().equals(currentUser.getId())) {
             throw new BookingAccessDeniedException("You may only cancel your own booking");
         }
         if (booking.getStatus() == BookingStatus.CANCELLED) {

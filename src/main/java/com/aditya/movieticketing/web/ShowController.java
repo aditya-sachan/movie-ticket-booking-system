@@ -7,6 +7,7 @@ import com.aditya.movieticketing.web.dto.HoldResponse;
 import com.aditya.movieticketing.web.dto.ShowSeatResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,12 +31,14 @@ public class ShowController {
     }
 
     @GetMapping("/{showId}/seats")
+    @PreAuthorize("isAuthenticated()")
     public List<ShowSeatResponse> seats(@PathVariable Long showId) {
         return showQueryService.seatMap(showId);
     }
 
     @PostMapping("/{showId}/holds")
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('CUSTOMER')")
     public HoldResponse hold(@PathVariable Long showId, @Valid @RequestBody HoldRequest request) {
         return holdService.hold(showId, request.seatIds(), request.discountCode());
     }

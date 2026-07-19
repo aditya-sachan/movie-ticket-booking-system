@@ -2,11 +2,13 @@ package com.aditya.movieticketing.web;
 
 import com.aditya.movieticketing.service.BookingService;
 import com.aditya.movieticketing.web.dto.BookingResponse;
-import com.aditya.movieticketing.web.dto.CancelBookingRequest;
 import com.aditya.movieticketing.web.dto.CancelResponse;
 import com.aditya.movieticketing.web.dto.CreateBookingRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,13 +28,16 @@ public class BookingController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public BookingResponse create(@Valid @RequestBody CreateBookingRequest request) {
-        return bookingService.confirm(request);
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public BookingResponse create(@Valid @RequestBody CreateBookingRequest request,
+                                  @AuthenticationPrincipal UserDetails principal) {
+        return bookingService.confirm(request, principal.getUsername());
     }
 
     @PostMapping("/{bookingId}/cancel")
+    @PreAuthorize("hasRole('CUSTOMER')")
     public CancelResponse cancel(@PathVariable Long bookingId,
-                                 @Valid @RequestBody CancelBookingRequest request) {
-        return bookingService.cancel(bookingId, request.userId());
+                                 @AuthenticationPrincipal UserDetails principal) {
+        return bookingService.cancel(bookingId, principal.getUsername());
     }
 }
