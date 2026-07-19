@@ -19,6 +19,13 @@
 
     <properties>
         <java.version>21</java.version>
+        <!--
+          Override Spring Boot 3.3.5's managed Testcontainers (1.19.x) with a newer line: its
+          docker-java negotiates the Docker API version correctly against modern engines (Docker
+          Desktop 4.82 / Engine API 1.55), avoiding the "client version too old" 400 the older
+          client sends.
+        -->
+        <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -91,6 +98,25 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!--
+              Pin the Docker Engine API version used by docker-java/Testcontainers. Without this,
+              docker-java negotiates too low a version (1.32) which a modern engine (min API 1.40)
+              rejects with HTTP 400. 1.44 is supported by any engine >= 1.40, and this carries no
+              machine-specific socket path so it stays portable.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <api.version>1.44</api.version>
+                    </systemPropertyVariables>
+                    <environmentVariables>
+                        <DOCKER_API_VERSION>1.44</DOCKER_API_VERSION>
+                    </environmentVariables>
+                </configuration>
             </plugin>
 
             <!--

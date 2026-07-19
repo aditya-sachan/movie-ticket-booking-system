@@ -64,4 +64,17 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
             order by s.id
             """)
     List<ShowSeat> findByShowWithSeat(@Param("showId") Long showId);
+
+    /**
+     * Same selection as {@link #lockSeatsForHold} but WITHOUT the pessimistic lock. Exists only to
+     * demonstrate, in a test, that removing the row lock breaks the no-double-booking guarantee
+     * (the check-then-act race). Not used by production code.
+     */
+    @Query("""
+            select ss from ShowSeat ss
+            where ss.show.id = :showId and ss.seat.id in :seatIds
+            order by ss.seat.id
+            """)
+    List<ShowSeat> findSeatsForHoldWithoutLock(@Param("showId") Long showId,
+                                               @Param("seatIds") Collection<Long> seatIds);
 }

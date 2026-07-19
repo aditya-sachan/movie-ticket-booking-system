@@ -10,4 +10,6 @@ public interface BookingSeatRepository extends JpaRepository<BookingSeat, Long> 
     List<BookingSeat> findByBooking_IdAndActiveTrue(Long bookingId);
 
     List<BookingSeat> findByBooking_Id(Long bookingId);
+
+    long countByShowSeat_IdAndActiveTrue(Long showSeatId);
 }
