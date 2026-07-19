@@ -101,6 +101,11 @@ Validate at hold time and re-validate at confirm time.
 - Ask when something is ambiguous rather than guessing silently.
 - Keep planning notes and prompt artifacts in `docs/` (submission requires them).
 
+## Decisions log
+- **Seat model:** physical `seat` belongs to a `screen` (layout defined once, reusable); a
+  `show` references a screen; `show_seat` is one row per (show_id, seat_id) created when the show
+  is created. Confirmed by the user before slice 2.
+
 ## Environment notes / assumptions
 - Only a JDK 26 is installed locally; there is no Java 21 JDK. The build targets Java 21 via
   `--release 21` (JDK 26 can do this). **Risk:** running Spring Boot 3.3.x tests on a JVM 26
