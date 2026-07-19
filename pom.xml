@@ -92,6 +92,36 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+
+            <!--
+              Pin the build to Java 21. A bare shell on this machine resolves to JDK 26, so this
+              guard fails the build loudly on any Java other than 21.x instead of silently
+              compiling on the wrong JDK (guards against JAVA_HOME being dropped). Portable:
+              needs no machine-specific toolchains.xml, so a clean ./mvnw build still works for
+              anyone who has Java 21.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java-21</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[21,22)</version>
+                                    <message>This project must be built with Java 21. Set JAVA_HOME
+                                        to a JDK 21 (e.g. Amazon Corretto 21).</message>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
