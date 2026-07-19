@@ -44,8 +44,9 @@ worth building, **propose it — don't build it.**
 - **Confirm**: verify hold token and non-expiry, transition to BOOKED, create Booking + Payment
   in the same transaction.
 - **Expiry**: `@Scheduled` job every 60s releases HELD rows past `hold_expires_at`.
-- **Backstop**: unique index on `booking_seat(show_seat_id)` so a duplicate booking fails at the
-  DB level even if application logic is wrong.
+- **Backstop**: a **partial** unique index `booking_seat(show_seat_id) WHERE active` so a
+  duplicate *active* booking of the same seat fails at the DB level even if application logic is
+  wrong. (See Decisions log for why partial rather than plain.)
 - **Cancel**: return seats to AVAILABLE, compute refund from the applicable RefundPolicy.
 
 ## Async notifications (must not block booking)
@@ -105,12 +106,28 @@ Validate at hold time and re-validate at confirm time.
 - **Seat model:** physical `seat` belongs to a `screen` (layout defined once, reusable); a
   `show` references a screen; `show_seat` is one row per (show_id, seat_id) created when the show
   is created. Confirmed by the user before slice 2.
+- **Booking backstop = partial unique index, not plain (approved).** The brief specified a plain
+  unique index on `booking_seat(show_seat_id)`. A plain index breaks the cancel -> re-book flow:
+  once a seat is booked its `booking_seat` row exists forever, so after cancelling, no one could
+  ever book that seat again (the index would reject the new row). We instead keep every
+  `booking_seat` row for history and add `booking_seat.active` (set false on cancel), with a
+  **partial** unique index `booking_seat(show_seat_id) WHERE active`. This preserves the exact
+  intent of the backstop — at most one *active* booking per seat, enforced by the DB even if
+  application logic is wrong — while still allowing a freed seat to be re-booked. Belt-and-braces
+  with the `SELECT ... FOR UPDATE` application-level serialization. (For the README + video.)
 
 ## Environment notes / assumptions
-- Only a JDK 26 is installed locally; there is no Java 21 JDK. The build targets Java 21 via
-  `--release 21` (JDK 26 can do this). **Risk:** running Spring Boot 3.3.x tests on a JVM 26
-  runtime (ByteBuddy/CGLIB, Testcontainers) is not something Spring Boot 3.3 was released
-  against. Installing a real Java 21 JDK (e.g. `brew install openjdk@21` or SDKMAN
-  `sdk install java 21-tem`) before the test slice is strongly recommended.
+- **Java 21 (Amazon Corretto 21.0.11) is installed** at
+  `/Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk`. A JDK 26 is also present and is
+  what a bare (non-interactive) shell resolves to.
 - Maven is not on PATH; a Maven wrapper (`./mvnw`) is committed so the build is self-contained.
+- **JDK pinning (committed, portable):** `maven-enforcer-plugin` with
+  `requireJavaVersion = [21,22)` runs in the `validate` phase, so the build **fails loudly** on
+  any Java other than 21.x instead of silently compiling on the wrong JDK. This is the guard
+  against `JAVA_HOME` being accidentally dropped in a later session. Enforcer was chosen over
+  Maven toolchains because toolchains would force every person who clones the repo to maintain a
+  machine-specific `~/.m2/toolchains.xml`, breaking a clean `./mvnw` build for the reviewer.
+- For local runs where a bare shell resolves to JDK 26, set
+  `JAVA_HOME=/Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home` (or put a
+  21 on PATH). If forgotten, enforcer stops the build with a clear message rather than using 26.
 - Docker is required for Testcontainers (concurrency + expiry integration tests).
