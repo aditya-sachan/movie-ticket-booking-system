@@ -1,0 +1,18 @@
+# Build output
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# OS files
+.DS_Store
+
+# Local environment / secrets
+.env
+.env.local
+*.local.properties
+application-local.properties
+application-local.yml
