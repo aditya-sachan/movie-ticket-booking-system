@@ -7,6 +7,9 @@ import java.util.List;
 
 public record HoldRequest(
         @NotEmpty(message = "seatIds must not be empty")
-        List<@NotNull Long> seatIds
+        List<@NotNull Long> seatIds,
+
+        // Optional discount code; validated now and re-validated at confirm.
+        String discountCode
 ) {
 }

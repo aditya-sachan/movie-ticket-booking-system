@@ -37,6 +37,6 @@ public class ShowController {
     @PostMapping("/{showId}/holds")
     @ResponseStatus(HttpStatus.CREATED)
     public HoldResponse hold(@PathVariable Long showId, @Valid @RequestBody HoldRequest request) {
-        return holdService.hold(showId, request.seatIds());
+        return holdService.hold(showId, request.seatIds(), request.discountCode());
     }
 }

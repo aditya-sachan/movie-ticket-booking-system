@@ -20,6 +20,10 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: false
 
+pricing:
+  # Flat tax rate applied to the discounted subtotal (0.18 = 18% GST). Configurable.
+  tax-rate: 0.18
+
 logging:
   level:
     org.flywaydb.core: info

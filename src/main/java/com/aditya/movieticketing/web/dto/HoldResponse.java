@@ -8,6 +8,8 @@ public record HoldResponse(
         Long showId,
         List<Long> seatIds,
         UUID holdToken,
-        Instant expiresAt
+        Instant expiresAt,
+        // Non-binding price preview for the held seats (re-computed at confirm).
+        PriceBreakdownResponse priceEstimate
 ) {
 }

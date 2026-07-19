@@ -13,6 +13,9 @@ public record CreateBookingRequest(
 
         // SEAM (slice 5): replaced by the authenticated principal once HTTP Basic is wired.
         @NotNull(message = "userId is required")
-        Long userId
+        Long userId,
+
+        // Optional discount code; re-validated and applied at confirm time.
+        String discountCode
 ) {
 }

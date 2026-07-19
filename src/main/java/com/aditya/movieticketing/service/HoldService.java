@@ -1,15 +1,20 @@
 package com.aditya.movieticketing.service;
 
+import com.aditya.movieticketing.domain.DiscountCode;
 import com.aditya.movieticketing.domain.SeatStatus;
 import com.aditya.movieticketing.domain.Show;
 import com.aditya.movieticketing.domain.ShowSeat;
+import com.aditya.movieticketing.exception.InvalidDiscountException;
 import com.aditya.movieticketing.exception.SeatUnavailableException;
 import com.aditya.movieticketing.exception.ShowNotFoundException;
+import com.aditya.movieticketing.repository.DiscountCodeRepository;
 import com.aditya.movieticketing.repository.ShowRepository;
 import com.aditya.movieticketing.repository.ShowSeatRepository;
 import com.aditya.movieticketing.web.dto.HoldResponse;
+import com.aditya.movieticketing.web.dto.PriceBreakdownResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -23,10 +28,17 @@ public class HoldService {
 
     private final ShowRepository showRepository;
     private final ShowSeatRepository showSeatRepository;
+    private final DiscountCodeRepository discountCodeRepository;
+    private final PricingService pricingService;
 
-    public HoldService(ShowRepository showRepository, ShowSeatRepository showSeatRepository) {
+    public HoldService(ShowRepository showRepository,
+                       ShowSeatRepository showSeatRepository,
+                       DiscountCodeRepository discountCodeRepository,
+                       PricingService pricingService) {
         this.showRepository = showRepository;
         this.showSeatRepository = showSeatRepository;
+        this.discountCodeRepository = discountCodeRepository;
+        this.pricingService = pricingService;
     }
 
     /**
@@ -37,10 +49,12 @@ public class HoldService {
      *   <li>set them HELD with a shared hold token and a 10-minute expiry.</li>
      * </ol>
      * A concurrent hold on any overlapping seat blocks on step 1 until this transaction commits,
-     * then fails at step 2 — this is what serializes bookings and prevents double allocation.
+     * then fails at step 2 — this is what serializes bookings and prevents double allocation. If a
+     * discount code is supplied it is validated here (and re-validated at confirm); the response
+     * carries a non-binding price estimate.
      */
     @Transactional
-    public HoldResponse hold(Long showId, List<Long> requestedSeatIds) {
+    public HoldResponse hold(Long showId, List<Long> requestedSeatIds, String discountCode) {
         List<Long> seatIds = requestedSeatIds.stream().distinct().sorted().toList();
 
         Show show = showRepository.findById(showId)
@@ -59,6 +73,9 @@ public class HoldService {
             }
         }
 
+        DiscountCode discount = resolveDiscount(discountCode);
+        PriceBreakdown estimate = pricingService.price(show, locked, discount, now);
+
         UUID holdToken = UUID.randomUUID();
         Instant expiresAt = now.plus(HOLD_DURATION);
         for (ShowSeat showSeat : locked) {
@@ -67,7 +84,17 @@ public class HoldService {
             showSeat.setHoldExpiresAt(expiresAt);
         }
 
-        return new HoldResponse(showId, seatIds, holdToken, expiresAt);
+        return new HoldResponse(showId, seatIds, holdToken, expiresAt,
+                new PriceBreakdownResponse(estimate.subtotal(), estimate.discount(),
+                        estimate.tax(), estimate.total()));
+    }
+
+    private DiscountCode resolveDiscount(String discountCode) {
+        if (!StringUtils.hasText(discountCode)) {
+            return null;
+        }
+        return discountCodeRepository.findByCode(discountCode.trim())
+                .orElseThrow(() -> new InvalidDiscountException("Unknown discount code " + discountCode));
     }
 
     /**

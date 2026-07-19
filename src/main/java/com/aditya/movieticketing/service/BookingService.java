@@ -4,6 +4,7 @@ import com.aditya.movieticketing.domain.AppUser;
 import com.aditya.movieticketing.domain.Booking;
 import com.aditya.movieticketing.domain.BookingSeat;
 import com.aditya.movieticketing.domain.BookingStatus;
+import com.aditya.movieticketing.domain.DiscountCode;
 import com.aditya.movieticketing.domain.NotificationOutbox;
 import com.aditya.movieticketing.domain.NotificationType;
 import com.aditya.movieticketing.domain.Payment;
@@ -15,11 +16,13 @@ import com.aditya.movieticketing.exception.BookingAccessDeniedException;
 import com.aditya.movieticketing.exception.BookingNotFoundException;
 import com.aditya.movieticketing.exception.HoldExpiredException;
 import com.aditya.movieticketing.exception.InvalidBookingStateException;
+import com.aditya.movieticketing.exception.InvalidDiscountException;
 import com.aditya.movieticketing.exception.ShowNotFoundException;
 import com.aditya.movieticketing.exception.UserNotFoundException;
 import com.aditya.movieticketing.repository.AppUserRepository;
 import com.aditya.movieticketing.repository.BookingRepository;
 import com.aditya.movieticketing.repository.BookingSeatRepository;
+import com.aditya.movieticketing.repository.DiscountCodeRepository;
 import com.aditya.movieticketing.repository.NotificationOutboxRepository;
 import com.aditya.movieticketing.repository.PaymentRepository;
 import com.aditya.movieticketing.repository.ShowRepository;
@@ -29,6 +32,7 @@ import com.aditya.movieticketing.web.dto.CancelResponse;
 import com.aditya.movieticketing.web.dto.CreateBookingRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.List;
@@ -44,6 +48,7 @@ public class BookingService {
     private final PaymentRepository paymentRepository;
     private final AppUserRepository appUserRepository;
     private final NotificationOutboxRepository notificationOutboxRepository;
+    private final DiscountCodeRepository discountCodeRepository;
     private final PricingService pricingService;
     private final RefundService refundService;
 
@@ -54,6 +59,7 @@ public class BookingService {
                           PaymentRepository paymentRepository,
                           AppUserRepository appUserRepository,
                           NotificationOutboxRepository notificationOutboxRepository,
+                          DiscountCodeRepository discountCodeRepository,
                           PricingService pricingService,
                           RefundService refundService) {
         this.showRepository = showRepository;
@@ -63,6 +69,7 @@ public class BookingService {
         this.paymentRepository = paymentRepository;
         this.appUserRepository = appUserRepository;
         this.notificationOutboxRepository = notificationOutboxRepository;
+        this.discountCodeRepository = discountCodeRepository;
         this.pricingService = pricingService;
         this.refundService = refundService;
     }
@@ -95,9 +102,15 @@ public class BookingService {
             }
         }
 
-        PriceBreakdown price = pricingService.priceBooking(show, seats);
+        // Re-validate the discount under a row lock and price the booking. The lock lets us check
+        // the redemption limit and increment it atomically, preventing over-redemption.
+        DiscountCode discount = lockDiscount(request.discountCode());
+        PriceBreakdown price = pricingService.price(show, seats, discount, now);
+        if (discount != null) {
+            discount.setTimesRedeemed(discount.getTimesRedeemed() + 1);
+        }
 
-        Booking booking = new Booking(user, show, BookingStatus.CONFIRMED, null,
+        Booking booking = new Booking(user, show, BookingStatus.CONFIRMED, discount,
                 price.subtotal(), price.discount(), price.tax(), price.total());
         bookingRepository.save(booking);
 
@@ -125,6 +138,14 @@ public class BookingService {
                 booking.getStatus().name(), seatIds,
                 booking.getSubtotalAmount(), booking.getDiscountAmount(),
                 booking.getTaxAmount(), booking.getTotalAmount(), booking.getCreatedAt());
+    }
+
+    private DiscountCode lockDiscount(String discountCode) {
+        if (!StringUtils.hasText(discountCode)) {
+            return null;
+        }
+        return discountCodeRepository.lockByCode(discountCode.trim())
+                .orElseThrow(() -> new InvalidDiscountException("Unknown discount code " + discountCode));
     }
 
     /**
