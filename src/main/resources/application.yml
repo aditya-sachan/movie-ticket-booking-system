@@ -24,10 +24,6 @@ pricing:
   # Flat tax rate applied to the discounted subtotal (0.18 = 18% GST). Configurable.
   tax-rate: 0.18
 
-booking:
-  # Maximum seats a single booking may hold.
-  max-seats-per-booking: 10
-
 logging:
   level:
     org.flywaydb.core: info

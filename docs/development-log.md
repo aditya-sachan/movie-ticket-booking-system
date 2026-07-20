@@ -153,12 +153,17 @@ create/list refund policies with their rules. A test tied it together end to end
 laid-out screen feeds through to a bookable show whose seat map shows the new seats — and confirmed a
 customer is forbidden from these endpoints.
 
-### Seat-selection rules — addition beyond the brief
+### Seat-selection rules — built, then removed
 
-A final addition enforced BookMyShow-style seat rules at hold time, in a pure `SeatSelectionRules`
-class: a configurable maximum seats per booking, and a no-orphan-seat rule that rejects a hold which
-would strand a lone available seat between two occupied seats in a row (a seat against the row
-boundary is not an orphan). It came with table-driven unit tests and an integration test on isolated
-single-row shows. Adding a stateful rule also surfaced that a couple of MockMvc tests had been
-relying on shared seat state; they were moved onto their own fresh shows so the rule stays
-deterministic under the shared Testcontainers database.
+An addition beyond the brief enforced BookMyShow-style seat rules at hold time, in a pure
+`SeatSelectionRules` class: a configurable maximum seats per booking, and a no-orphan-seat rule that
+rejected a hold which would strand a lone available seat between two occupied seats in a row (a seat
+against the row boundary was not an orphan). It came with table-driven unit tests and an integration
+test on isolated single-row shows.
+
+It was then **removed**. The rule is not in the brief, and without a seat-map UI to grey out invalid
+choices at selection time, rejecting a customer's otherwise-valid seat request with a 422 is worse
+than the gap it prevents — real platforms enforce this visually while selecting, not as an API
+rejection. One part of the work was kept: adding the stateful rule had surfaced that a couple of
+MockMvc tests were relying on shared seat state, so they were moved onto their own fresh shows. That
+test-isolation improvement is independent of the feature and was retained.

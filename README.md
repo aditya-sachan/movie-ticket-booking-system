@@ -231,10 +231,6 @@ surefire config so `docker-java` works against modern engines.
 - **Tax** is a single configurable flat rate; there is no per-jurisdiction tax model.
 - **Payment and notification delivery are stubs** (no real gateway / email / SMS).
 - **Hold duration is 10 minutes**; sweep (60 s) and outbox poll (5 s) intervals are configurable.
-- **Seat-selection rules** are enforced at hold time (pure `SeatSelectionRules`): at most
-  `booking.max-seats-per-booking` seats (default 10), and a hold may not strand a lone available
-  seat between two occupied seats in a row (a seat against the row boundary is not an orphan).
-  Violations return `InvalidSeatSelection` (422).
 - Demo users are seeded with fixed passwords for evaluation convenience.
 - **Idempotent booking**: `POST /bookings` accepts an optional `Idempotency-Key` header. A repeat
   with the same key returns the original booking instead of a duplicate (or a `HoldExpired` error
@@ -254,6 +250,10 @@ surefire config so `docker-java` works against modern engines.
   The schema supports them.
 - **Pagination on browse/history** — endpoints return full lists; pagination would be the first
   production addition.
+- **Seat-selection rules (max seats, no orphan seat)** — built as an extra, then **removed**. It is
+  not in the brief, and without a seat-map UI to grey out invalid choices, rejecting a customer's
+  otherwise-valid seat request with a 422 is worse than the gap it prevents. Real platforms enforce
+  this visually at selection time, not as an API rejection, so it was reverted.
 
 ## Build & JDK notes
 
