@@ -6,8 +6,9 @@ discount codes and tax, payments (stubbed), cancellations with policy-driven ref
 non-blocking notifications. The central guarantee is **no double-booking of a seat under
 concurrency**.
 
-> Built as a take-home. The development direction lived in [`Claude.md`](./Claude.md); the raw
-> slice-by-slice planning notes are in [`docs/`](./docs). This README is written from the code that
+> Built as a take-home. The development direction lived in [`Claude.md`](./Claude.md); planning
+> notes and a reconstructed slice-by-slice [development log](./docs/development-log.md) (not a
+> verbatim prompt transcript) are in [`docs/`](./docs). This README is written from the code that
 > actually exists.
 
 ---

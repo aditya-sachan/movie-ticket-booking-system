@@ -1,12 +1,14 @@
-# Development prompt log
+# Development log
 
-The sequence of instructions used to drive this AI-assisted build. The project was developed in
-reviewable slices — one concern at a time, compiled and tested before moving on, and committed at
-each step — so this log doubles as a record of how the work progressed and why decisions were made.
-It mirrors the commit history one-to-one.
+A written summary of how this build progressed, reconstructed from the commit history and
+[`../Claude.md`](../Claude.md). **This is not a verbatim prompt transcript** — it is a
+slice-by-slice account of the order the work was done in and the design decisions behind each step,
+both of which the commits and code bear out.
 
-Standing direction throughout lived in [`../Claude.md`](../Claude.md) (stack, conventions, the
-no-double-booking design, build order) and was treated as the source of truth for *how* to build.
+The project was developed in reviewable slices — one concern at a time, compiled and tested before
+moving on, and committed at each step. Standing direction throughout lived in `Claude.md` (stack,
+conventions, the no-double-booking design, build order). The sections below paraphrase the intent
+of each slice; they are a reconstruction, not the raw instructions.
 
 ---
 

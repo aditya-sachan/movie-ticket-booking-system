@@ -1,7 +1,9 @@
 # AI workflow
 
 Covers the submission's "skills used during development" item, and describes the workflow that was
-actually used.
+actually used. A slice-by-slice account of how the build progressed — reconstructed from the commit
+history and `Claude.md`, not a verbatim prompt transcript — is in
+[`development-log.md`](./development-log.md).
 
 ## Skills
 
