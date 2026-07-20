@@ -1,8 +1,8 @@
 # Planning notes — slice by slice
 
-Raw development artifact. The project was built in reviewable slices, one commit (or a few) per
-slice, each compiled and — once it existed — tested before moving on. Technical direction lived in
-[`../Claude.md`](../Claude.md) and was treated as the source of truth for *how* to build.
+The project was built in reviewable slices, one commit (or a few) per slice, each compiled and —
+once it existed — tested before moving on. Technical direction lived in [`../Claude.md`](../Claude.md)
+and was treated as the source of truth for *how* to build.
 
 ## Approach
 
