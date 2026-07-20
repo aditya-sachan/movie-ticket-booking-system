@@ -54,6 +54,9 @@ public class Booking {
     @Column(name = "idempotency_key", length = 80)
     private String idempotencyKey;
 
+    @Column(name = "reminder_enqueued", nullable = false)
+    private boolean reminderEnqueued = false;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -122,6 +125,14 @@ public class Booking {
 
     public void setIdempotencyKey(String idempotencyKey) {
         this.idempotencyKey = idempotencyKey;
+    }
+
+    public boolean isReminderEnqueued() {
+        return reminderEnqueued;
+    }
+
+    public void setReminderEnqueued(boolean reminderEnqueued) {
+        this.reminderEnqueued = reminderEnqueued;
     }
 
     public Instant getCreatedAt() {

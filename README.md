@@ -95,6 +95,11 @@ is written to **`notification_outbox`**; a separate `@Scheduled` poller drains `
 delivers them via a logging stub (`NotificationSender`). Delivery therefore happens off the request
 thread and can never roll back or slow down a booking. No raw `@Async` in the booking path.
 
+**Reminders** work the same way: a `@Scheduled` `ReminderScheduler` enqueues one `REMINDER` outbox
+row per confirmed booking whose show starts within a configurable lead window
+(`booking.reminder.lead-hours`, default 24), using a per-booking flag so each booking is reminded
+exactly once. Reminders are therefore also delivered off the booking path.
+
 ## Pricing and refunds
 
 ```
