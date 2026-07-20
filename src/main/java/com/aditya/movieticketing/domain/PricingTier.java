@@ -42,4 +42,8 @@ public class PricingTier {
     public BigDecimal getMultiplier() {
         return multiplier;
     }
+
+    public void setMultiplier(BigDecimal multiplier) {
+        this.multiplier = multiplier;
+    }
 }

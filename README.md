@@ -183,7 +183,11 @@ All endpoints require HTTP Basic auth. Roles enforced with `@PreAuthorize`.
 | `POST` | `/bookings/{id}/cancel` | CUSTOMER | Cancel own booking → refund |
 | `POST` / `GET` | `/admin/cities` | ADMIN | Create / list cities |
 | `POST` / `GET` | `/admin/theaters` | ADMIN | Create / list theaters |
+| `POST` / `GET` | `/admin/screens` | ADMIN | Create / list screens |
+| `POST` / `GET` | `/admin/screens/{id}/seats` | ADMIN | Add / list a screen's physical seat layout |
 | `POST` | `/admin/shows` | ADMIN | Create a show (materializes its `show_seat` rows) |
+| `POST` / `GET` / `PUT` | `/admin/pricing-tiers` | ADMIN | Create / list / update (multiplier) pricing tiers |
+| `POST` / `GET` | `/admin/refund-policies` | ADMIN | Create (with rules) / list refund policies |
 
 Errors are RFC 7807 `ProblemDetail`: `SeatUnavailable`/`HoldExpired` → 409, `ShowNotFound`/
 `BookingNotFound` → 404, `InvalidDiscount` → 422, validation → 400, wrong role/ownership → 403,
@@ -239,10 +243,10 @@ surefire config so `docker-java` works against modern engines.
 - **Real payment gateway / email / SMS** — explicitly out of scope; stubbed behind seams
   (`Payment`, `NotificationSender`) so a real provider drops in without touching the booking path.
 - **OAuth/SSO/MFA, frontend, Docker packaging, CI/CD, metrics/tracing, microservices** — out of scope.
-- **Full admin CRUD (update/delete) and admin management of pricing tiers / refund policies** —
-  create + list for city/theater/show is implemented to demonstrate the flow; update/delete and the
-  remaining admin surfaces were the reduced-scope cut under time pressure. The schema already
-  supports them.
+- **Delete/most update operations on admin entities** — admin can create and list cities,
+  theaters, screens, seat layouts, shows, pricing tiers (with multiplier update), and refund
+  policies; delete and the remaining update operations were left out as low-value for the brief.
+  The schema supports them.
 - **Pagination on browse/history** — endpoints return full lists; pagination would be the first
   production addition.
 
