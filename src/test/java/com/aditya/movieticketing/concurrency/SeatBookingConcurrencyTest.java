@@ -67,7 +67,7 @@ class SeatBookingConcurrencyTest extends AbstractIntegrationTest {
         runConcurrently(() -> {
             try {
                 HoldResponse hold = holdService.hold(showId, List.of(seatId), null);
-                bookingService.confirm(new CreateBookingRequest(showId, hold.holdToken(), null), "alice");
+                bookingService.confirm(new CreateBookingRequest(showId, hold.holdToken(), null), "alice", null);
                 booked.incrementAndGet();
             } catch (SeatUnavailableException expected) {
                 seatUnavailable.incrementAndGet();
@@ -113,7 +113,7 @@ class SeatBookingConcurrencyTest extends AbstractIntegrationTest {
                     ss.setHoldToken(sharedToken);
                     ss.setHoldExpiresAt(Instant.now().plus(10, ChronoUnit.MINUTES));
                 });
-                bookingService.confirm(new CreateBookingRequest(showId, sharedToken, null), "alice");
+                bookingService.confirm(new CreateBookingRequest(showId, sharedToken, null), "alice", null);
                 booked.incrementAndGet();
             } catch (Throwable expectedUnderRace) {
                 // DataIntegrityViolation / HoldExpired / SeatUnavailable are all acceptable here.

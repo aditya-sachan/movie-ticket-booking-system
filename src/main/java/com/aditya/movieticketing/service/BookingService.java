@@ -80,9 +80,19 @@ public class BookingService {
      * BookingSeat rows, a (stub) Payment, and a notification outbox row.
      */
     @Transactional
-    public BookingResponse confirm(CreateBookingRequest request, String username) {
+    public BookingResponse confirm(CreateBookingRequest request, String username, String idempotencyKey) {
         AppUser user = appUserRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException(username));
+
+        // Idempotent replay: if this key already produced a booking, return it unchanged instead of
+        // creating a second one (or erroring because the hold was already consumed on the first try).
+        if (StringUtils.hasText(idempotencyKey)) {
+            var replayed = bookingRepository.findByIdempotencyKey(idempotencyKey);
+            if (replayed.isPresent()) {
+                return toResponse(replayed.get(), bookedSeatIds(replayed.get().getId()));
+            }
+        }
+
         Show show = showRepository.findById(request.showId())
                 .orElseThrow(() -> new ShowNotFoundException(request.showId()));
 
@@ -112,6 +122,9 @@ public class BookingService {
 
         Booking booking = new Booking(user, show, BookingStatus.CONFIRMED, discount,
                 price.subtotal(), price.discount(), price.tax(), price.total());
+        if (StringUtils.hasText(idempotencyKey)) {
+            booking.setIdempotencyKey(idempotencyKey);
+        }
         bookingRepository.save(booking);
 
         List<Long> seatIds = seats.stream().map(ss -> ss.getSeat().getId()).toList();
@@ -134,10 +147,21 @@ public class BookingService {
         notificationOutboxRepository.save(new NotificationOutbox(
                 booking, NotificationType.BOOKING_CONFIRMATION, user.getUsername(), payload));
 
-        return new BookingResponse(booking.getId(), show.getId(), user.getId(),
+        return toResponse(booking, seatIds);
+    }
+
+    private BookingResponse toResponse(Booking booking, List<Long> seatIds) {
+        return new BookingResponse(booking.getId(), booking.getShow().getId(), booking.getUser().getId(),
                 booking.getStatus().name(), seatIds,
                 booking.getSubtotalAmount(), booking.getDiscountAmount(),
                 booking.getTaxAmount(), booking.getTotalAmount(), booking.getCreatedAt());
+    }
+
+    private List<Long> bookedSeatIds(Long bookingId) {
+        return bookingSeatRepository.findByBooking_Id(bookingId).stream()
+                .map(bs -> bs.getShowSeat().getSeat().getId())
+                .sorted()
+                .toList();
     }
 
     private DiscountCode lockDiscount(String discountCode) {

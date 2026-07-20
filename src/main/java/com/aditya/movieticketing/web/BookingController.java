@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,8 +45,9 @@ public class BookingController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('CUSTOMER')")
     public BookingResponse create(@Valid @RequestBody CreateBookingRequest request,
+                                  @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
                                   @AuthenticationPrincipal UserDetails principal) {
-        return bookingService.confirm(request, principal.getUsername());
+        return bookingService.confirm(request, principal.getUsername(), idempotencyKey);
     }
 
     @PostMapping("/{bookingId}/cancel")

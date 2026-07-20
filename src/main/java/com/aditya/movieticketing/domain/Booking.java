@@ -51,6 +51,9 @@ public class Booking {
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "idempotency_key", length = 80)
+    private String idempotencyKey;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -111,6 +114,14 @@ public class Booking {
 
     public BigDecimal getTotalAmount() {
         return totalAmount;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public Instant getCreatedAt() {

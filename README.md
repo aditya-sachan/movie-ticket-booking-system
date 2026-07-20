@@ -173,7 +173,7 @@ All endpoints require HTTP Basic auth. Roles enforced with `@PreAuthorize`.
 | `GET` | `/shows?cityId&movieId&date` | any | Browse/search shows (filters optional; `date` = `YYYY-MM-DD`) |
 | `GET` | `/shows/{id}/seats` | any | Seat map for a show (label, class, status) |
 | `POST` | `/shows/{id}/holds` | CUSTOMER | Hold seats → returns hold token + price estimate |
-| `POST` | `/bookings` | CUSTOMER | Confirm a hold into a booking |
+| `POST` | `/bookings` | CUSTOMER | Confirm a hold into a booking (optional `Idempotency-Key` header — a retry returns the original booking) |
 | `GET` | `/bookings` | CUSTOMER | The caller's own booking history |
 | `POST` | `/bookings/{id}/cancel` | CUSTOMER | Cancel own booking → refund |
 | `POST` / `GET` | `/admin/cities` | ADMIN | Create / list cities |
@@ -222,6 +222,10 @@ surefire config so `docker-java` works against modern engines.
 - **Payment and notification delivery are stubs** (no real gateway / email / SMS).
 - **Hold duration is 10 minutes**; sweep (60 s) and outbox poll (5 s) intervals are configurable.
 - Demo users are seeded with fixed passwords for evaluation convenience.
+- **Idempotent booking**: `POST /bookings` accepts an optional `Idempotency-Key` header. A repeat
+  with the same key returns the original booking instead of a duplicate (or a `HoldExpired` error
+  because the hold was consumed on the first call); a partial unique index on
+  `booking(idempotency_key)` is the DB backstop.
 
 ## What I left out, and why
 
