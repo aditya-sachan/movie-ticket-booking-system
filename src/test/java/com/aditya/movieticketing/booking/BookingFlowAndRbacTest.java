@@ -2,9 +2,18 @@ package com.aditya.movieticketing.booking;
 
 import com.aditya.movieticketing.AbstractIntegrationTest;
 import com.aditya.movieticketing.domain.ShowSeat;
+import com.aditya.movieticketing.repository.MovieRepository;
+import com.aditya.movieticketing.repository.PricingTierRepository;
 import com.aditya.movieticketing.repository.ShowRepository;
 import com.aditya.movieticketing.repository.ShowSeatRepository;
-import com.fasterxml.jackson.databind.JsonNode;
+import com.aditya.movieticketing.repository.TheaterRepository;
+import com.aditya.movieticketing.service.AdminService;
+import com.aditya.movieticketing.web.dto.CreateScreenRequest;
+import com.aditya.movieticketing.web.dto.CreateSeatsRequest;
+import com.aditya.movieticketing.web.dto.CreateShowRequest;
+import com.aditya.movieticketing.web.dto.SeatResponse;
+import com.aditya.movieticketing.web.dto.SeatRowSpec;
+import com.aditya.movieticketing.web.dto.ShowSummaryResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,7 +21,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -35,6 +48,14 @@ class BookingFlowAndRbacTest extends AbstractIntegrationTest {
     private ShowRepository showRepository;
     @Autowired
     private ShowSeatRepository showSeatRepository;
+    @Autowired
+    private AdminService adminService;
+    @Autowired
+    private TheaterRepository theaterRepository;
+    @Autowired
+    private MovieRepository movieRepository;
+    @Autowired
+    private PricingTierRepository pricingTierRepository;
 
     private Long anyShowId() {
         return showRepository.findAll().stream().findFirst().orElseThrow().getId();
@@ -45,12 +66,34 @@ class BookingFlowAndRbacTest extends AbstractIntegrationTest {
         return seats.get(index).getSeat().getId();
     }
 
+    /**
+     * A fresh show with its own clean 10-seat row, isolated from other tests' seat state so the
+     * seat-selection (no-orphan) rule is deterministic. Returns the show id and its seat ids in
+     * seat-number order.
+     */
+    private ShowSeats freshShow() {
+        Long theaterId = theaterRepository.findAll().get(0).getId();
+        Long movieId = movieRepository.findAll().get(0).getId();
+        Long tierId = pricingTierRepository.findByName("REGULAR").orElseThrow().getId();
+        var screen = adminService.createScreen(new CreateScreenRequest(theaterId, "flow-" + UUID.randomUUID()));
+        List<SeatResponse> seats = adminService.addSeats(screen.id(),
+                new CreateSeatsRequest(List.of(new SeatRowSpec("R", 10, "REGULAR"))));
+        Instant start = Instant.now().plus(6, ChronoUnit.DAYS);
+        ShowSummaryResponse show = adminService.createShow(new CreateShowRequest(
+                movieId, screen.id(), tierId, null, start, start.plus(2, ChronoUnit.HOURS), new BigDecimal("200")));
+        return new ShowSeats(show.showId(), seats.stream().map(SeatResponse::id).toList());
+    }
+
+    private record ShowSeats(long showId, List<Long> seatIds) {
+    }
+
     @Test
     @DisplayName("happy path: browse → hold → confirm → cancel")
     void happyPath() throws Exception {
-        Long showId = anyShowId();
-        long seatA = seatIdAt(showId, 10);
-        long seatB = seatIdAt(showId, 11);
+        ShowSeats fixture = freshShow();
+        long showId = fixture.showId();
+        long seatA = fixture.seatIds().get(0); // seat R1
+        long seatB = fixture.seatIds().get(1); // seat R2 — contiguous, leaves no orphan
 
         // browse
         mockMvc.perform(get("/shows/{id}/seats", showId).with(httpBasic("alice", "alice123")))
@@ -93,8 +136,9 @@ class BookingFlowAndRbacTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("a customer cannot cancel another customer's booking (403)")
     void customerCannotCancelOthersBooking() throws Exception {
-        Long showId = anyShowId();
-        long seat = seatIdAt(showId, 12);
+        ShowSeats fixture = freshShow();
+        long showId = fixture.showId();
+        long seat = fixture.seatIds().get(0); // seat R1 at the row boundary — no orphan
 
         String holdJson = mockMvc.perform(post("/shows/{id}/holds", showId)
                         .with(httpBasic("alice", "alice123"))

@@ -230,6 +230,10 @@ surefire config so `docker-java` works against modern engines.
 - **Tax** is a single configurable flat rate; there is no per-jurisdiction tax model.
 - **Payment and notification delivery are stubs** (no real gateway / email / SMS).
 - **Hold duration is 10 minutes**; sweep (60 s) and outbox poll (5 s) intervals are configurable.
+- **Seat-selection rules** are enforced at hold time (pure `SeatSelectionRules`): at most
+  `booking.max-seats-per-booking` seats (default 10), and a hold may not strand a lone available
+  seat between two occupied seats in a row (a seat against the row boundary is not an orphan).
+  Violations return `InvalidSeatSelection` (422).
 - Demo users are seeded with fixed passwords for evaluation convenience.
 - **Idempotent booking**: `POST /bookings` accepts an optional `Idempotency-Key` header. A repeat
   with the same key returns the original booking instead of a duplicate (or a `HoldExpired` error
