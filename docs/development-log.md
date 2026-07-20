@@ -1,144 +1,164 @@
 # Development log
 
 A written summary of how this build progressed, reconstructed from the commit history and
-[`../Claude.md`](../Claude.md). **This is not a verbatim prompt transcript** — it is a
-slice-by-slice account of the order the work was done in and the design decisions behind each step,
-both of which the commits and code bear out.
+[`../Claude.md`](../Claude.md). **This is not a verbatim prompt transcript** — it is a description,
+in order, of what each slice did and why. The commits and code bear it out.
 
-The project was developed in reviewable slices — one concern at a time, compiled and tested before
-moving on, and committed at each step. Standing direction throughout lived in `Claude.md` (stack,
-conventions, the no-double-booking design, build order). The sections below paraphrase the intent
-of each slice; they are a reconstruction, not the raw instructions.
+The project was developed in reviewable slices: one concern at a time, compiled (and tested, once
+tests existed) before moving on, with a conventional commit at the end of each and assumptions
+recorded as they surfaced. Standing technical direction lived in `Claude.md` (stack, conventions,
+the no-double-booking design, build order) and was carried across sessions so prior decisions did
+not have to be re-derived.
 
----
-
-## 0. Framing
-
-> Read `docs/requirements.pdf` in full first. Treat the brief as depth on the core booking flows,
-> not breadth into new features — if something extra seems worth building, propose it, don't build
-> it. Everything I give below is technical direction and overrides any default you'd pick. Build one
-> slice at a time and STOP after each for review; run a compile before declaring a slice done, and
-> tests once they exist; make a conventional commit at the end of each slice; state assumptions
-> explicitly as you go; keep planning notes in `docs/`. Ask when something is ambiguous rather than
-> guessing.
-
-## 1. Skeleton & build setup
-
-> Set up the project skeleton: Spring Boot 3.3.x parent, Java 21 (not whatever the machine
-> defaults to), groupId `com.aditya`, artifact `movie-ticket-booking-system`. Dependencies: web,
-> data-jpa, validation, security, postgresql, flyway-core, flyway-database-postgresql; test scope:
-> starter-test, security-test, Testcontainers postgresql + junit-jupiter. No Lombok. Add a
-> `.gitignore`, the `MovieTicketBookingApplication` entry point, and commit. Confirm the plan back
-> to me before scaffolding anything further.
-
-## 2. Persist the Java 21 toolchain guarantee
-
-> Before we go further, make the Java 21 requirement enforceable so a later session can't silently
-> build on the wrong JDK. Add a build-level guard that fails loudly on anything other than 21.x, and
-> keep it portable — don't force every reviewer to maintain a machine-specific toolchains file.
-> Commit separately.
-
-## 3. Schema, entities, seed data
-
-> Slice: the Flyway schema, JPA entities, and seed data. Use the physical-seat model — a `seat`
-> belongs to a `screen` (layout defined once, reusable), a `show` references a screen, and
-> `show_seat` is one row per (show, seat) created when the show is created. Model the full domain
-> now (users, cities/theaters/screens/seats, movies, shows, show_seats, discount codes, refund
-> policies, bookings, payments, notification outbox) even though behaviour comes later. Enums as
-> `VARCHAR`+`CHECK`, money as `NUMERIC`, timestamps as `TIMESTAMPTZ`. Point `application.yml` at the
-> local Postgres with `ddl-auto: validate`, and prove the migrations apply cleanly and every entity
-> validates by booting the app before you call the slice done.
->
-> On the booking backstop: the brief says a plain unique index on `booking_seat(show_seat_id)`, but
-> that breaks cancel→re-book. Use a partial unique index `WHERE active` instead and record the
-> reasoning — I want it in the README and the video.
-
-## 4. Hold → confirm → cancel with row locking (the core)
-
-> This is the most important part — take the time to get it right.
-> - `POST /shows/{id}/holds`: lock the requested `show_seat` rows with `SELECT ... FOR UPDATE`
->   ordered by seat id (consistent ordering avoids deadlock), verify all AVAILABLE, set HELD with a
->   10-minute expiry and a hold token, return the token.
-> - `POST /bookings`: verify the token and non-expiry, transition HELD → BOOKED, and create
->   Booking + BookingSeat + a stub Payment + a notification outbox row, all in one transaction.
-> - `POST /bookings/{id}/cancel`: seats back to AVAILABLE, deactivate the booking_seat rows, refund
->   from the applicable RefundPolicy.
-> - A `@Scheduled` sweep (60s) releases expired holds; an outbox poller delivers via a logging stub.
->
-> Skip pricing for now — use `base_price` only and leave a clear seam where the pricing service will
-> plug in. Exercise the flow manually against Postgres before committing.
-
-## 5. Pricing, discount codes, refund policies
-
-> Plug real pricing into the seam: `final = (base_price × seat_class_multiplier × tier_multiplier) −
-> discount + taxes`, with WEEKEND tier applied by show day. Discount codes: percentage or flat, min
-> order value, max redemptions, validity window — validate at hold and re-validate at confirm, and
-> guard redemptions atomically. Wire RefundPolicy fully into cancel. Persist the full breakdown onto
-> the booking. Keep the arithmetic in a pure, unit-testable class.
-
-## 6. Security & error handling
-
-> Real HTTP Basic backed by DB users with bcrypt hashes seeded through the PasswordEncoder. Remove
-> the userId-in-body seam and take the principal from the security context. `@PreAuthorize` on every
-> endpoint (customers book/cancel/browse; the ownership rule that a customer can't touch another's
-> booking stays enforced). One `@RestControllerAdvice` returning RFC 7807 `ProblemDetail` for all
-> domain exceptions plus validation, access-denied, and an unexpected-error fallback.
-
-## 7. Tests — highest priority, do not compress
-
-> - A 50-thread concurrency test on a single seat, Testcontainers Postgres (not H2 — it won't
->   reproduce real row locking): exactly one booking wins, 49 get `SeatUnavailable`. Also demonstrate
->   it fails (the race appears) if the row lock is removed.
-> - A hold-expiry release test.
-> - Table-driven unit tests for pricing and refund calculation covering boundaries.
-> - RBAC tests: a customer can't reach another customer's booking or an admin endpoint.
-> - Happy path: browse → hold → confirm → cancel.
-
-## 8. Browse/search, booking history, admin CRUD
-
-> `GET /shows` with city/movie/date filters, `GET /bookings` for the caller's own history, and admin
-> create/list for city, theater, and show (creating a show should materialize its show_seat rows).
-> Keep it scoped — this is the reduced-scope slice.
-
-## 9. README and raw development notes
-
-> Draft the README from the actual code, not from Claude.md: setup, an API table, the locking design
-> and why, every assumption, and an explicit "what I left out and why" section. Write the
-> slice-by-slice planning notes into `docs/`. Confirm the requirements PDF and Claude.md are both
-> committed.
+The brief was deliberately open-ended, so the guiding choice was to treat it as depth on the core
+booking flows rather than breadth into new features — anything extra was proposed rather than built.
 
 ---
 
-## Enhancements (after the core submission was complete)
+## 1. Skeleton and build setup
 
-## 10. Idempotent booking
+The first slice established the project shell: Spring Boot 3.3.x, Java 21, groupId `com.aditya`,
+artifact `movie-ticket-booking-system`, and the dependency set (web, data-jpa, validation, security,
+postgresql, flyway, and Testcontainers for tests), deliberately without Lombok. It added the
+`MovieTicketBookingApplication` entry point, a `.gitignore`, and a committed Maven wrapper so the
+build was self-contained. Nothing beyond the shell was scaffolded, so the structure could be
+reviewed before real code landed.
 
-> Add idempotent confirmation: an optional `Idempotency-Key` header on `POST /bookings`, so a retry
-> returns the original booking instead of a duplicate or a HoldExpired error. Back it with a DB
-> unique constraint and add a test.
+## 2. Pinning the Java 21 toolchain
 
-## 11. Showtime reminders
+Because the machine's default JDK was newer than 21, a build-level guard was added so a later
+session could not silently compile on the wrong JDK. `maven-enforcer-plugin` requires Java `[21,22)`
+in the validate phase and fails the build loudly otherwise. Enforcer was chosen over Maven
+toolchains to keep a clean checkout building without a machine-specific `toolchains.xml`. It went in
+as its own commit.
 
-> Close the "reminder notifications" requirement: a `@Scheduled` job that enqueues exactly one
-> REMINDER outbox row per confirmed booking whose show starts within a configurable lead window,
-> reusing the existing outbox and poller. Add a test proving it fires once and doesn't duplicate.
+## 3. Schema, entities, and seed data
 
-## 12. Admin management of the remaining entities
+This slice modeled the full domain up front, even though behaviour came later. It used the
+physical-seat model: a `seat` belongs to a `screen` (layout defined once, reusable), a `show`
+references a screen, and `show_seat` is one row per (show, seat) created with the show. Flyway V1
+created the schema (users, cities/theaters/screens/seats, movies, shows, show_seats, discount codes,
+refund policies, bookings, payments, notification outbox), V2 seeded demo data, and the JPA entities
+(field access, explicit constructors/getters) were mapped against it. Enums were stored as
+`VARCHAR`+`CHECK`, money as `NUMERIC`, and timestamps as `TIMESTAMPTZ`. With `ddl-auto: validate`,
+booting the app proved both that the migrations applied cleanly against real Postgres and that every
+entity validated against the schema.
 
-> The admin role is defined as managing seat layouts, pricing tiers, and refund policies too — add
-> those endpoints: create/list screens and seats, create/list/update pricing tiers, create/list
-> refund policies with their rules. Add a test that a laid-out screen feeds through to a bookable
-> show, and that a customer is forbidden.
+One design decision was recorded here: the brief specified a plain unique index on
+`booking_seat(show_seat_id)`, but that would break cancel→re-book (the historical row would occupy
+the index forever). The build instead used a partial unique index `WHERE active`, preserving the
+"at most one active booking per seat" backstop while allowing a freed seat to be re-booked. The
+reasoning was written into `Claude.md` for the README and video.
 
-## 13. Seat-selection rules
+## 4. Hold, confirm, and cancel with row locking
 
-> Add BookMyShow-style seat rules at hold time: a max seats-per-booking cap and a no-orphan-seat
-> rule (don't strand a lone available seat between two occupied seats in a row). Keep the logic in a
-> pure class with table-driven unit tests, plus an integration test on isolated single-row shows.
+This was the core of the project. A hold (`POST /shows/{id}/holds`) locks the requested `show_seat`
+rows with `SELECT ... FOR UPDATE` ordered by seat id — consistent ordering avoids deadlock — verifies
+they are available, and sets them HELD with a ten-minute expiry and a shared hold token. Confirm
+(`POST /bookings`) re-checks the token and non-expiry under lock, transitions the seats to BOOKED,
+and creates the Booking, BookingSeat rows, a stub Payment, and a notification outbox row in one
+transaction. Cancel (`POST /bookings/{id}/cancel`) returns the seats to AVAILABLE, deactivates the
+booking_seat rows, and computes a refund from the show's policy. A `@Scheduled` sweep releases
+expired holds every 60 seconds, and an outbox poller delivers notifications via a logging stub so
+delivery never blocks booking. Pricing was deferred behind a `PricingService` seam (base price
+only), and the whole flow was exercised manually against Postgres before the slice was committed.
+
+## 5. Pricing, discount codes, and refund policies
+
+This slice filled the pricing seam left by the previous step. The formula
+`final = (base_price × seat_class_multiplier × tier_multiplier) − discount + taxes` went into a pure
+`PriceCalculator` so it could be unit-tested table-driven, with per-seat class multipliers and the
+WEEKEND tier applied by the show's day. Discount codes (percentage or flat, minimum order value, max
+redemptions, validity window) were validated at hold time and re-validated at confirm under a row
+lock, with an atomic `times_redeemed` increment to prevent over-redemption. Tax became a configurable
+flat rate on the discounted subtotal, refunds were wired into cancel through a pure `RefundCalculator`
+reading the policy's tiers, and the full breakdown (subtotal/discount/tax/total) was persisted on the
+booking.
+
+## 6. Security and error handling
+
+Authentication moved to real HTTP Basic backed by `app_user` rows, with bcrypt passwords seeded
+through the `PasswordEncoder` rather than hardcoded hashes. The `userId`-in-body seam from the
+earlier slices was removed in favour of the authenticated principal, `@PreAuthorize` was applied to
+every endpoint (customers hold/book/cancel; browsing requires authentication), and the ownership
+rule — a customer may only act on their own booking — was enforced in the service. A single
+`@RestControllerAdvice` returned RFC 7807 `ProblemDetail` for the domain exceptions plus validation,
+malformed JSON, access-denied, and an unexpected-error fallback.
+
+## 7. Tests
+
+The most heavily weighted slice. The centrepiece was a 50-thread concurrency test on a single seat,
+backed by a real PostgreSQL 16 in Testcontainers because H2 does not reproduce `SELECT ... FOR
+UPDATE` locking: with the row lock, exactly one booking wins and the other 49 get `SeatUnavailable`;
+with the lock removed, multiple threads pass the availability check (the race) while the partial
+unique index still prevents any double-allocation. Alongside it were a hold-expiry release test,
+table-driven unit tests for the pricing and refund calculators, RBAC tests (a customer cannot reach
+another customer's booking or an admin endpoint), and a happy-path browse→hold→confirm→cancel test.
+This slice also resolved a Testcontainers-versus-modern-Docker issue where `docker-java` negotiated
+too low an API version, by bumping Testcontainers and pinning the Docker Engine API version.
+
+## 8. Browse/search, booking history, and admin CRUD
+
+A reduced-scope slice added the remaining read paths and the initial admin surface: `GET /shows`
+with optional city/movie/date filters, `GET /bookings` returning the caller's own history scoped to
+the principal, and admin create/list endpoints for cities, theaters, and shows — where creating a
+show materializes one AVAILABLE `show_seat` per physical seat on its screen.
+
+## 9. README and development notes
+
+The README was drafted from the finished code (setup, an API table, the locking design and why,
+every recorded assumption, and an explicit "what I left out and why" section), and the slice-by-slice
+planning notes were written into `docs/`. The requirements PDF and `Claude.md` were confirmed to be
+committed.
 
 ---
 
-## Compliance pass
+## Post-submission work
 
-> Go through the requirements PDF once more and compare it against what's built — call out anything
-> that doesn't fully satisfy the brief, and fix the genuine gaps.
+With the core submission complete, further work fell into two kinds: additions beyond the brief, and
+fixes that closed genuine gaps against it. In order, the idempotency work came first, then a
+compliance review surfaced two gaps (reminders and admin management) which were fixed, and finally
+the seat-selection rules were added.
+
+### Idempotent booking — addition beyond the brief
+
+The first follow-up added idempotent confirmation. `POST /bookings` accepts an optional
+`Idempotency-Key` header; a retry with the same key returns the original booking instead of creating
+a duplicate or failing with `HoldExpired` (the hold having been consumed on the first attempt). A
+partial unique index on `booking(idempotency_key)` is the database backstop, and a test covered both
+the replay and its dependence on the key. This was not required by the brief — it was added because
+it reinforces the same correctness story as the concurrency work.
+
+### Compliance review against the brief
+
+A pass back over the requirements PDF then compared the build to the brief and surfaced two genuine
+gaps. First, the brief calls for *confirmation and reminder* notifications, but only confirmation and
+cancellation were being emitted. Second, the admin role is defined as managing seat layouts, pricing
+tiers, and refund policies, none of which had endpoints — only cities, theaters, and shows did. The
+next two slices closed those gaps.
+
+### Reminder notifications — compliance fix
+
+To close the first gap, a `@Scheduled` `ReminderScheduler` enqueues exactly one `REMINDER` outbox
+row per confirmed booking whose show starts within a configurable lead window (default 24 hours),
+reusing the existing outbox and poller so reminders are delivered off the booking path. A
+per-booking flag makes each booking remind exactly once across sweeps, and a test confirmed a second
+sweep does not duplicate it.
+
+### Admin management of seat layouts, pricing tiers, and refund policies — compliance fix
+
+To close the second gap, the admin surface was extended to everything the role owns: create/list
+screens and a screen's physical seats (per row, per class), create/list/update pricing tiers, and
+create/list refund policies with their rules. A test tied it together end to end — a freshly
+laid-out screen feeds through to a bookable show whose seat map shows the new seats — and confirmed a
+customer is forbidden from these endpoints.
+
+### Seat-selection rules — addition beyond the brief
+
+A final addition enforced BookMyShow-style seat rules at hold time, in a pure `SeatSelectionRules`
+class: a configurable maximum seats per booking, and a no-orphan-seat rule that rejects a hold which
+would strand a lone available seat between two occupied seats in a row (a seat against the row
+boundary is not an orphan). It came with table-driven unit tests and an integration test on isolated
+single-row shows. Adding a stateful rule also surfaced that a couple of MockMvc tests had been
+relying on shared seat state; they were moved onto their own fresh shows so the rule stays
+deterministic under the shared Testcontainers database.
